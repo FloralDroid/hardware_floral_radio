@@ -27,7 +27,7 @@
 namespace floral::radio {
 namespace {
 
-constexpr char kMountedProfilePath[] = "/mnt/vendor/floral_stream/radio.json";
+constexpr char kMountedProfilePath[] = "/ipc/floral_stream/radio.json";
 constexpr char kPersistentProfilePath[] =
     "/data/vendor/floral/radio/profile.json";
 

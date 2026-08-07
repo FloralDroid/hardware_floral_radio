@@ -8,7 +8,7 @@ through `floral-rild` and publishes
 `floral.device.radio.IRadioState/default` for FloralDevice control.
 
 At boot the service first validates
-`/mnt/vendor/floral_stream/radio.json`. A valid mounted profile becomes the
+`/ipc/floral_stream/radio.json`. A valid mounted profile becomes the
 device identity and is persisted under `/data/vendor/floral/radio`. If the
 mounted file is missing or invalid, the service reuses the last valid persisted
 profile. When neither source is available, it generates and persists a stable

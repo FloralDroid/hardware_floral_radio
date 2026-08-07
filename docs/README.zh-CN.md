@@ -6,7 +6,7 @@
 `floral-rild` 提供标准 Android Radio HAL 适配层。FloralDevice 使用
 `floral.device.radio.IRadioState/default` 控制该模型。
 
-服务启动时首先校验 `/mnt/vendor/floral_stream/radio.json`。有效的挂载配置会成为
+服务启动时首先校验 `/ipc/floral_stream/radio.json`。有效的挂载配置会成为
 设备身份，并持久化到 `/data/vendor/floral/radio`。挂载文件缺失或无效时，服务会
 复用最近一次持久化成功的配置；两者都不存在时，生成并保存稳定的 FloralDroid
 默认身份。
