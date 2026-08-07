@@ -1,0 +1,2 @@
+/data/vendor/floral/radio(/.*)?    u:object_r:floral_radio_data_file:s0
+/(vendor|system/vendor)/bin/hw/floral-rild    u:object_r:rild_exec:s0

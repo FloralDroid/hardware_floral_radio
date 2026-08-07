@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "operatorLongName": "Floral Mobile",
+  "operatorShortName": "Floral",
+  "mcc": "001",
+  "mnc": "01",
+  "imei": "490154203237518",
+  "imeisv": "01",
+  "imsi": "001010123456789",
+  "iccid": "8901001012345678903",
+  "msisdn": "+15551234567",
+  "basebandVersion": "FLORAL.MODEM.1.0",
+  "simPin": "1234"
+}

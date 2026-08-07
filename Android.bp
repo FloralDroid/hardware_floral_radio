@@ -1,0 +1,123 @@
+package {
+    default_applicable_licenses: ["hardware_floral_radio_license"],
+}
+
+license {
+    name: "hardware_floral_radio_license",
+    visibility: [":__subpackages__"],
+    license_kinds: ["SPDX-license-identifier-Apache-2.0"],
+    license_text: ["LICENSE"],
+}
+
+cc_defaults {
+    name: "floral_radio_defaults",
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wextra",
+    ],
+    cpp_std: "c++17",
+    local_include_dirs: ["include"],
+}
+
+cc_library_static {
+    name: "libfloral_radio_model",
+    defaults: ["floral_radio_defaults"],
+    host_supported: true,
+    vendor_available: true,
+    srcs: [
+        "common/GsmPduCodec.cpp",
+        "common/RadioStateModel.cpp",
+    ],
+    static_libs: ["libfloral_device_simulation_common"],
+    export_static_lib_headers: ["libfloral_device_simulation_common"],
+    export_include_dirs: ["include"],
+}
+
+cc_library_static {
+    name: "libfloral_radio_service",
+    defaults: ["floral_radio_defaults"],
+    vendor: true,
+    srcs: [
+        "common/RadioProfileStore.cpp",
+        "service/RadioStateService.cpp",
+    ],
+    static_libs: ["libfloral_radio_model"],
+    export_static_lib_headers: ["libfloral_radio_model"],
+    shared_libs: [
+        "floral.device.radio-V1-ndk_platform",
+        "libbase",
+        "libbinder_ndk",
+        "libjsoncpp",
+        "liblog",
+        "libutils",
+    ],
+    export_include_dirs: ["include"],
+}
+
+cc_library_shared {
+    name: "libfloral-ril",
+    defaults: ["floral_radio_defaults"],
+    vendor: true,
+    srcs: ["ril/FloralRil.cpp"],
+    cflags: ["-DRIL_SHLIB"],
+    include_dirs: [
+        "device/google/cuttlefish",
+        "hardware/ril/include",
+    ],
+    static_libs: [
+        "libfloral_device_simulation_common",
+        "libfloral_radio_model",
+        "libfloral_radio_service",
+    ],
+    shared_libs: [
+        "floral.device.radio-V1-ndk_platform",
+        "libbase",
+        "libbinder_ndk",
+        "libjsoncpp",
+        "liblog",
+        "libutils",
+    ],
+}
+
+cc_binary {
+    name: "floral-rild",
+    defaults: ["floral_radio_defaults"],
+    vendor: true,
+    relative_install_path: "hw",
+    overrides: ["rild"],
+    srcs: ["service/floral-rild.cpp"],
+    cflags: ["-DRIL_SHLIB"],
+    include_dirs: [
+        "device/google/cuttlefish",
+        "hardware/ril/include",
+    ],
+    shared_libs: [
+        "libbinder_ndk",
+        "libcutils",
+        "libfloral-ril",
+        "liblog",
+        "libril-modem-lib",
+    ],
+    init_rc: ["init/floral-rild.rc"],
+    vintf_fragments: ["init/floral-rild.xml"],
+}
+
+cc_test_host {
+    name: "floral_radio_model_test",
+    defaults: ["floral_radio_defaults"],
+    srcs: [
+        "common/RadioProfileStore.cpp",
+        "tests/RadioStateModelTest.cpp",
+    ],
+    static_libs: [
+        "libfloral_device_simulation_common",
+        "libfloral_radio_model",
+    ],
+    shared_libs: [
+        "libbase",
+        "libjsoncpp",
+    ],
+    data: ["examples/radio.json"],
+    test_suites: ["general-tests"],
+}
