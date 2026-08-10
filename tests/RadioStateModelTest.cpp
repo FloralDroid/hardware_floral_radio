@@ -21,17 +21,24 @@
 #include <android-base/file.h>
 #include <gtest/gtest.h>
 
+#include <limits>
+
 namespace floral::radio {
 namespace {
 
-TEST(RadioProfileStoreTest, RepositoryExampleIsValid) {
+RadioProfile LoadExampleProfile() {
   RadioProfile profile;
   std::string error;
   const std::string path =
       android::base::GetExecutableDirectory() + "/examples/radio.json";
-  RadioProfileStore store("/unused/floral-radio-profile.json");
+  EXPECT_TRUE(RadioProfileStore::LoadFile(path, &profile, &error)) << error;
+  return profile;
+}
 
-  ASSERT_TRUE(store.LoadFile(path, &profile, &error)) << error;
+TEST(RadioProfileStoreTest, RepositoryExampleIsValid) {
+  const RadioProfile profile = LoadExampleProfile();
+  std::string error;
+
   EXPECT_EQ(profile.operator_long_name, "Floral Mobile");
   EXPECT_EQ(profile.mcc, "001");
   EXPECT_EQ(profile.mnc, "01");
@@ -39,17 +46,33 @@ TEST(RadioProfileStoreTest, RepositoryExampleIsValid) {
   EXPECT_TRUE(RadioStateModel::ValidateProfile(profile, &error)) << error;
 }
 
-TEST(RadioStateModelTest, DefaultIdentityIsStableAndValid) {
-  const RadioProfile first = RadioStateModel::CreateDefaultProfile(31);
-  const RadioProfile second = RadioStateModel::CreateDefaultProfile(31);
-  EXPECT_EQ(first.imei, second.imei);
-  EXPECT_EQ(first.iccid, second.iccid);
-  EXPECT_TRUE(RadioStateModel::ValidateProfile(first, nullptr));
-  EXPECT_EQ(first.imsi.substr(0, 5), "00101");
+TEST(RadioStateModelTest, StartsDisabledWithoutMountedProfile) {
+  RadioStateModel model(31);
+  const RadioSnapshot snapshot = model.Advance(1'000'000'000);
+
+  EXPECT_FALSE(model.profile_configured());
+  EXPECT_TRUE(model.profile().imsi.empty());
+  EXPECT_FALSE(snapshot.radio_on);
+  EXPECT_EQ(snapshot.sim_state, SimState::kAbsent);
+  EXPECT_EQ(snapshot.voice_registration, RegistrationState::kNotRegistered);
+  EXPECT_EQ(snapshot.data_registration, RegistrationState::kNotRegistered);
+  EXPECT_EQ(snapshot.technology, RadioTechnology::kUnknown);
+  EXPECT_TRUE(snapshot.cells.empty());
+  EXPECT_EQ(snapshot.signal.rssi_dbm, std::numeric_limits<int32_t>::max());
+  EXPECT_FALSE(model.SetRadioPower(true));
+
+  RegistrationControl registration;
+  EXPECT_FALSE(model.SetRegistration(registration, 1'000'000'000));
+  EXPECT_FALSE(model.SetSignal(SignalState{}, 30'000, 1'000'000'000));
+  EXPECT_FALSE(model.SetSimState(SimState::kReady, 30'000,
+                                 1'000'000'000));
+  EXPECT_EQ(model.InjectIncomingCall("+80012345678"), 0U);
+  EXPECT_EQ(model.InjectSms("+80012345678", "hello", 1'000'000'000), 0U);
 }
 
 TEST(RadioStateModelTest, InvalidProfileIsRejectedAsAUnit) {
   RadioStateModel model(37);
+  ASSERT_TRUE(model.SetProfile(LoadExampleProfile()));
   const RadioProfile before = model.profile();
   RadioProfile invalid = before;
   invalid.mcc = "460";
@@ -60,6 +83,7 @@ TEST(RadioStateModelTest, InvalidProfileIsRejectedAsAUnit) {
 
 TEST(RadioStateModelTest, ExternalRegistrationExpiresToAutonomousMode) {
   RadioStateModel model(41);
+  ASSERT_TRUE(model.SetProfile(LoadExampleProfile()));
   RegistrationControl control;
   control.voice = RegistrationState::kRoaming;
   control.data = RegistrationState::kRoaming;
@@ -75,6 +99,7 @@ TEST(RadioStateModelTest, ExternalRegistrationExpiresToAutonomousMode) {
 
 TEST(RadioStateModelTest, CallAndSmsEventsRemainInspectable) {
   RadioStateModel model(43);
+  ASSERT_TRUE(model.SetProfile(LoadExampleProfile()));
   const uint64_t call_id = model.InjectIncomingCall("+80012345678");
   ASSERT_NE(call_id, 0U);
   EXPECT_TRUE(model.SetCallState(call_id, CallState::kActive));
@@ -88,6 +113,7 @@ TEST(RadioStateModelTest, CallAndSmsEventsRemainInspectable) {
 
 TEST(RadioStateModelTest, FullSmsHistoryStillAcceptsANewEvent) {
   RadioStateModel model(47);
+  ASSERT_TRUE(model.SetProfile(LoadExampleProfile()));
   for (size_t index = 0; index < 64; ++index) {
     ASSERT_NE(model.InjectSms("+80012345678", "hello", index + 1), 0U);
   }

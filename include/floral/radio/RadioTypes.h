@@ -56,17 +56,17 @@ enum class CallState : int32_t {
 
 struct RadioProfile {
   uint32_t version = 1;
-  std::string operator_long_name = "Floral Mobile";
-  std::string operator_short_name = "Floral";
-  std::string mcc = "001";
-  std::string mnc = "01";
+  std::string operator_long_name;
+  std::string operator_short_name;
+  std::string mcc;
+  std::string mnc;
   std::string imei;
-  std::string imeisv = "01";
+  std::string imeisv;
   std::string imsi;
   std::string iccid;
   std::string msisdn;
-  std::string baseband_version = "FLORAL.MODEM.1.0";
-  std::string sim_pin = "1234";
+  std::string baseband_version;
+  std::string sim_pin;
 };
 
 struct SignalState {

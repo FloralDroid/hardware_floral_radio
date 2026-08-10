@@ -17,6 +17,7 @@
 #include "floral/radio/RadioStateService.h"
 
 #include "floral/radio/GsmPduCodec.h"
+#include "floral/radio/RadioProfileStore.h"
 
 #include <android-base/logging.h>
 #include <utils/Timers.h>
@@ -28,8 +29,6 @@ namespace floral::radio {
 namespace {
 
 constexpr char kMountedProfilePath[] = "/ipc/floral_stream/radio.json";
-constexpr char kPersistentProfilePath[] =
-    "/data/vendor/floral/radio/profile.json";
 
 aidl::floral::device::radio::RadioSignal
 ToAidlSignal(const SignalState &signal) {
@@ -45,29 +44,15 @@ ToAidlSignal(const SignalState &signal) {
 
 } // namespace
 
-RadioStateService::RadioStateService() : store_(kPersistentProfilePath) {
+RadioStateService::RadioStateService() {
   RadioProfile profile;
   std::string mounted_error;
-  std::string persistent_error;
-  if (store_.LoadFile(kMountedProfilePath, &profile, &mounted_error)) {
+  if (RadioProfileStore::LoadFile(kMountedProfilePath, &profile,
+                                  &mounted_error)) {
     model_.SetProfile(profile);
-    std::string save_error;
-    if (!store_.SavePersistent(profile, &save_error)) {
-      LOG(WARNING) << "failed to persist mounted Floral radio profile: "
-                   << save_error;
-    }
     LOG(INFO) << "using validated mounted Floral radio profile";
-  } else if (store_.LoadPersistent(&profile, &persistent_error)) {
-    model_.SetProfile(profile);
-    LOG(INFO) << "using persisted Floral radio profile";
   } else {
-    std::string save_error;
-    if (!store_.SavePersistent(model_.profile(), &save_error)) {
-      LOG(WARNING) << "failed to persist generated Floral radio profile: "
-                   << save_error;
-    }
-    LOG(INFO) << "using generated Floral radio profile; mounted="
-              << mounted_error << "; persistent=" << persistent_error;
+    LOG(INFO) << "radio simulation disabled: " << mounted_error;
   }
 }
 

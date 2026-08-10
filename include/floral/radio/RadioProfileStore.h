@@ -24,15 +24,8 @@ namespace floral::radio {
 
 class RadioProfileStore final {
 public:
-  explicit RadioProfileStore(std::string persistent_path);
-
-  bool LoadFile(const std::string &path, RadioProfile *profile,
-                std::string *error) const;
-  bool LoadPersistent(RadioProfile *profile, std::string *error) const;
-  bool SavePersistent(const RadioProfile &profile, std::string *error) const;
-
-private:
-  std::string persistent_path_;
+  static bool LoadFile(const std::string &path, RadioProfile *profile,
+                       std::string *error);
 };
 
 } // namespace floral::radio

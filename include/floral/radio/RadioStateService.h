@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "floral/radio/RadioProfileStore.h"
 #include "floral/radio/RadioStateModel.h"
 
 #include <aidl/floral/device/radio/BnRadioState.h>
@@ -102,7 +101,6 @@ private:
 
   std::mutex mutex_;
   RadioStateModel model_;
-  RadioProfileStore store_;
   std::function<void(uint32_t)> change_callback_;
 };
 

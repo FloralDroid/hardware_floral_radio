@@ -119,23 +119,27 @@ int GsmSignalStrength(int rssi_dbm) {
 
 RIL_SignalStrength_v12 MakeSignalStrength(const SignalState &signal) {
   RIL_SignalStrength_v12 result = {};
+  const bool unavailable =
+      signal.rssi_dbm == INT_MAX || signal.rsrp_dbm == INT_MAX ||
+      signal.rsrq_db == INT_MAX || signal.rssnr_tenth_db == INT_MAX ||
+      signal.cqi == INT_MAX || signal.timing_advance == INT_MAX;
   result.GW_SignalStrength.signalStrength = GsmSignalStrength(signal.rssi_dbm);
-  result.GW_SignalStrength.bitErrorRate = 0;
+  result.GW_SignalStrength.bitErrorRate = unavailable ? 99 : 0;
   result.CDMA_SignalStrength.dbm = INT_MAX;
   result.CDMA_SignalStrength.ecio = INT_MAX;
   result.EVDO_SignalStrength.dbm = INT_MAX;
   result.EVDO_SignalStrength.ecio = INT_MAX;
   result.EVDO_SignalStrength.signalNoiseRatio = INT_MAX;
   result.LTE_SignalStrength.signalStrength = GsmSignalStrength(signal.rssi_dbm);
-  result.LTE_SignalStrength.rsrp = -signal.rsrp_dbm;
-  result.LTE_SignalStrength.rsrq = -signal.rsrq_db;
+  result.LTE_SignalStrength.rsrp = unavailable ? INT_MAX : -signal.rsrp_dbm;
+  result.LTE_SignalStrength.rsrq = unavailable ? INT_MAX : -signal.rsrq_db;
   result.LTE_SignalStrength.rssnr = signal.rssnr_tenth_db;
   result.LTE_SignalStrength.cqi = signal.cqi;
   result.LTE_SignalStrength.timingAdvance = signal.timing_advance;
   result.TD_SCDMA_SignalStrength.rscp = INT_MAX;
   result.WCDMA_SignalStrength.signalStrength =
       GsmSignalStrength(signal.rssi_dbm);
-  result.WCDMA_SignalStrength.bitErrorRate = 0;
+  result.WCDMA_SignalStrength.bitErrorRate = unavailable ? 99 : 0;
   result.NR_SignalStrength = {INT_MAX, INT_MAX, INT_MAX,
                               INT_MAX, INT_MAX, INT_MAX};
   return result;
@@ -185,7 +189,9 @@ void RespondCardStatus(RIL_Token token) {
   }
   status.base.base.physicalSlotId = 0;
   status.base.base.atr = nullptr;
-  status.base.base.iccid = const_cast<char *>(profile.iccid.c_str());
+  status.base.base.iccid = base.card_state == RIL_CARDSTATE_PRESENT
+                               ? const_cast<char *>(profile.iccid.c_str())
+                               : nullptr;
   status.base.eid = nullptr;
   Complete(token, RIL_E_SUCCESS, &status, sizeof(status));
 }
@@ -299,7 +305,9 @@ void RespondSlotStatus(RIL_Token token) {
   status.base.slotState = SLOT_STATE_ACTIVE;
   status.base.atr = nullptr;
   status.base.logicalSlotId = 0;
-  status.base.iccid = const_cast<char *>(profile.iccid.c_str());
+  status.base.iccid = status.base.cardState == RIL_CARDSTATE_PRESENT
+                          ? const_cast<char *>(profile.iccid.c_str())
+                          : nullptr;
   status.eid = nullptr;
   Complete(token, RIL_E_SUCCESS, &status, sizeof(status));
 }

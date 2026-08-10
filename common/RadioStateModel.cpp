@@ -19,7 +19,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <random>
 
 namespace floral::radio {
 namespace {
@@ -59,21 +58,6 @@ bool HasValidLuhn(const std::string &value) {
              value.back() - '0';
 }
 
-std::string RandomDigits(std::mt19937_64 *engine, size_t count) {
-  std::uniform_int_distribution<int> digit(0, 9);
-  std::string result;
-  result.reserve(count);
-  for (size_t index = 0; index < count; ++index) {
-    result.push_back(static_cast<char>('0' + digit(*engine)));
-  }
-  return result;
-}
-
-std::string WithLuhn(std::string prefix) {
-  prefix.push_back(static_cast<char>('0' + LuhnCheckDigit(prefix)));
-  return prefix;
-}
-
 bool ValidLease(int64_t duration_ms) {
   return duration_ms > 0 && duration_ms <= kMaximumLeaseMs;
 }
@@ -86,15 +70,41 @@ bool ValidPhoneNumber(const std::string &value) {
   return start < value.size() && AllDigits(value.substr(start));
 }
 
+SignalState UnavailableSignal() {
+  const int32_t unavailable = std::numeric_limits<int32_t>::max();
+  return {
+      .rssi_dbm = unavailable,
+      .rsrp_dbm = unavailable,
+      .rsrq_db = unavailable,
+      .rssnr_tenth_db = unavailable,
+      .cqi = unavailable,
+      .timing_advance = unavailable,
+  };
+}
+
 } // namespace
 
 RadioStateModel::RadioStateModel(uint64_t seed)
-    : profile_(CreateDefaultProfile(seed)),
-      random_(floral::device::simulation::DeriveSeed(seed, 1)),
+    : random_(floral::device::simulation::DeriveSeed(seed, 1)),
       rsrp_noise_(floral::device::simulation::DeriveSeed(seed, 2), 25.0f, 3.0f),
       rsrq_noise_(floral::device::simulation::DeriveSeed(seed, 3), 20.0f, 1.2f),
       snr_noise_(floral::device::simulation::DeriveSeed(seed, 4), 18.0f,
                  15.0f) {
+  // Keep the HAL registered so Android observes an absent SIM instead of a
+  // crashing or repeatedly restarting radio service.
+  state_.radio_on = false;
+  state_.sim_state = SimState::kAbsent;
+  state_.voice_registration = RegistrationState::kNotRegistered;
+  state_.data_registration = RegistrationState::kNotRegistered;
+  state_.technology = RadioTechnology::kUnknown;
+  state_.signal = UnavailableSignal();
+  state_.cells.clear();
+}
+
+void RadioStateModel::ActivateConfiguredProfile() {
+  const uint64_t generation = state_.generation;
+  state_ = RadioSnapshot{};
+  state_.generation = generation;
   CellState serving;
   serving.identity = 1;
   state_.cells.push_back(serving);
@@ -107,16 +117,8 @@ RadioStateModel::RadioStateModel(uint64_t seed)
   neighbor.signal.rsrp_dbm -= 9;
   state_.cells.push_back(neighbor);
   state_.signal = serving.signal;
-}
-
-RadioProfile RadioStateModel::CreateDefaultProfile(uint64_t seed) {
-  std::mt19937_64 engine(seed);
-  RadioProfile profile;
-  profile.imei = WithLuhn("35" + RandomDigits(&engine, 12));
-  profile.imsi = profile.mcc + profile.mnc + RandomDigits(&engine, 10);
-  profile.iccid = WithLuhn("89001" + RandomDigits(&engine, 13));
-  profile.msisdn = "+800" + RandomDigits(&engine, 8);
-  return profile;
+  external_lease_expiry_ns_ = 0;
+  next_handover_timestamp_ns_ = 0;
 }
 
 bool RadioStateModel::ValidateProfile(const RadioProfile &profile,
@@ -149,13 +151,15 @@ bool RadioStateModel::SetProfile(const RadioProfile &profile) {
     return false;
   }
   profile_ = profile;
+  profile_configured_ = true;
+  ActivateConfiguredProfile();
   IncrementGeneration();
   return true;
 }
 
 bool RadioStateModel::SetRegistration(const RegistrationControl &control,
                                       int64_t timestamp_ns) {
-  if (!ValidLease(control.lease_duration_ms) ||
+  if (!profile_configured_ || !ValidLease(control.lease_duration_ms) ||
       control.voice < RegistrationState::kNotRegistered ||
       control.voice > RegistrationState::kRoaming ||
       control.data < RegistrationState::kNotRegistered ||
@@ -186,7 +190,8 @@ bool RadioStateModel::ValidateSignal(const SignalState &signal) const {
 bool RadioStateModel::SetSignal(const SignalState &signal,
                                 int64_t lease_duration_ms,
                                 int64_t timestamp_ns) {
-  if (!ValidateSignal(signal) || !ValidLease(lease_duration_ms)) {
+  if (!profile_configured_ || !ValidateSignal(signal) ||
+      !ValidLease(lease_duration_ms)) {
     return false;
   }
   state_.signal = signal;
@@ -210,7 +215,8 @@ bool RadioStateModel::ValidateCell(const CellState &cell) const {
 bool RadioStateModel::ReplaceCells(const std::vector<CellState> &cells,
                                    int64_t lease_duration_ms,
                                    int64_t timestamp_ns) {
-  if (cells.empty() || cells.size() > kMaximumCells ||
+  if (!profile_configured_ || cells.empty() ||
+      cells.size() > kMaximumCells ||
       !ValidLease(lease_duration_ms) ||
       std::count_if(cells.begin(), cells.end(),
                     [](const CellState &cell) { return cell.registered; }) !=
@@ -233,7 +239,8 @@ bool RadioStateModel::ReplaceCells(const std::vector<CellState> &cells,
 
 bool RadioStateModel::SetSimState(SimState state, int64_t lease_duration_ms,
                                   int64_t timestamp_ns) {
-  if (state < SimState::kAbsent || state > SimState::kPukRequired ||
+  if (!profile_configured_ || state < SimState::kAbsent ||
+      state > SimState::kPukRequired ||
       !ValidLease(lease_duration_ms)) {
     return false;
   }
@@ -249,7 +256,7 @@ bool RadioStateModel::SetSimState(SimState state, int64_t lease_duration_ms,
 }
 
 bool RadioStateModel::SetRadioPower(bool enabled) {
-  if (state_.radio_on == enabled) {
+  if (!profile_configured_ || state_.radio_on == enabled) {
     return false;
   }
   state_.radio_on = enabled;
@@ -267,7 +274,7 @@ bool RadioStateModel::SetRadioPower(bool enabled) {
 }
 
 void RadioStateModel::ReleaseExternalControl() {
-  if (external_lease_expiry_ns_ == 0) {
+  if (!profile_configured_ || external_lease_expiry_ns_ == 0) {
     return;
   }
   external_lease_expiry_ns_ = 0;
@@ -280,7 +287,9 @@ void RadioStateModel::ReleaseExternalControl() {
 }
 
 uint64_t RadioStateModel::InjectIncomingCall(const std::string &number) {
-  if (!ValidPhoneNumber(number) || state_.calls.size() >= kMaximumCalls) {
+  if (!profile_configured_ || !state_.radio_on ||
+      state_.sim_state != SimState::kReady || !ValidPhoneNumber(number) ||
+      state_.calls.size() >= kMaximumCalls) {
     return 0;
   }
   CallRecord call;
@@ -295,8 +304,9 @@ uint64_t RadioStateModel::InjectIncomingCall(const std::string &number) {
 }
 
 bool RadioStateModel::Dial(const std::string &number) {
-  if (!ValidPhoneNumber(number) || state_.sim_state != SimState::kReady ||
-      !state_.radio_on || state_.calls.size() >= kMaximumCalls) {
+  if (!profile_configured_ || !ValidPhoneNumber(number) ||
+      state_.sim_state != SimState::kReady || !state_.radio_on ||
+      state_.calls.size() >= kMaximumCalls) {
     return false;
   }
   CallRecord call;
@@ -336,7 +346,9 @@ bool RadioStateModel::Hangup(uint64_t id) {
 uint64_t RadioStateModel::InjectSms(const std::string &address,
                                     const std::string &body,
                                     int64_t timestamp_ns) {
-  if (!ValidPhoneNumber(address) || body.empty() || body.size() > 1'024) {
+  if (!profile_configured_ || !state_.radio_on ||
+      state_.sim_state != SimState::kReady || !ValidPhoneNumber(address) ||
+      body.empty() || body.size() > 1'024) {
     return 0;
   }
   SmsEvent event;
@@ -356,7 +368,9 @@ uint64_t RadioStateModel::InjectSms(const std::string &address,
 void RadioStateModel::RecordOutgoingSms(const std::string &address,
                                         const std::string &body,
                                         int64_t timestamp_ns) {
-  if (!ValidPhoneNumber(address) || body.size() > 1'024) {
+  if (!profile_configured_ || !state_.radio_on ||
+      state_.sim_state != SimState::kReady || !ValidPhoneNumber(address) ||
+      body.size() > 1'024) {
     return;
   }
   SmsEvent event;
@@ -422,7 +436,8 @@ RadioSnapshot RadioStateModel::Advance(int64_t timestamp_ns) {
       timestamp_ns >= external_lease_expiry_ns_) {
     ReleaseExternalControl();
   }
-  if (!state_.externally_controlled) {
+  if (profile_configured_ && state_.radio_on &&
+      state_.sim_state == SimState::kReady && !state_.externally_controlled) {
     AdvanceAutonomousState(elapsed_seconds, timestamp_ns);
   }
   state_.timestamp_ns = timestamp_ns;

@@ -8,11 +8,11 @@ through `floral-rild` and publishes
 `floral.device.radio.IRadioState/default` for FloralDevice control.
 
 At boot the service first validates
-`/ipc/floral_stream/radio.json`. A valid mounted profile becomes the
-device identity and is persisted under `/data/vendor/floral/radio`. If the
-mounted file is missing or invalid, the service reuses the last valid persisted
-profile. When neither source is available, it generates and persists a stable
-default FloralDroid identity.
+`/ipc/floral_stream/radio.json`. A valid mounted profile becomes the device
+identity and enables cellular simulation for that boot. Missing, unreadable,
+or invalid content leaves the Radio HAL available but reports radio off, no
+SIM, no registration, unknown signal, and no cells. No generated or persisted
+profile is used as a fallback.
 
 The validated [example profile](../examples/radio.json) can be copied directly
 into a host instance directory as `radio.json`. Identity fields are accepted

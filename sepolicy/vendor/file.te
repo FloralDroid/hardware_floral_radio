@@ -1,3 +1,1 @@
-type floral_radio_data_file, file_type, data_file_type;
-
 type floral_radio_service, service_manager_type, vendor_service;

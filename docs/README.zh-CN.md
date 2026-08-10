@@ -7,9 +7,9 @@
 `floral.device.radio.IRadioState/default` 控制该模型。
 
 服务启动时首先校验 `/ipc/floral_stream/radio.json`。有效的挂载配置会成为
-设备身份，并持久化到 `/data/vendor/floral/radio`。挂载文件缺失或无效时，服务会
-复用最近一次持久化成功的配置；两者都不存在时，生成并保存稳定的 FloralDroid
-默认身份。
+本次启动的设备身份并启用蜂窝模拟。文件缺失、不可读或无效时，Radio HAL 仍保持
+可用，但报告无线电关闭、SIM 缺失、未注册、信号未知且没有小区；不会生成默认身份，
+也不会读取持久化身份作为回退。
 
 仓库中的[示例配置](../examples/radio.json)已由模型测试直接校验，可以作为
 `radio.json` 挂载到宿主实例目录。身份字段按一个整体接收：MCC、MNC 必须是 IMSI

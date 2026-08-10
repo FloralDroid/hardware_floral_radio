@@ -1,8 +1,4 @@
 on post-fs-data
-    mkdir /data/vendor/floral 0711 root root
-    mkdir /data/vendor/floral/radio 0770 radio radio
-    restorecon_recursive /data/vendor/floral/radio
-
     # Keep the mounted identity private while allowing the radio service to read it.
     chown radio radio /ipc/floral_stream/radio.json
     chmod 0600 /ipc/floral_stream/radio.json

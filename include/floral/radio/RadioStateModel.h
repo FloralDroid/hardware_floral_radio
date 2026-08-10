@@ -29,7 +29,6 @@ public:
   explicit RadioStateModel(
       uint64_t seed = floral::device::simulation::GenerateSessionSeed());
 
-  static RadioProfile CreateDefaultProfile(uint64_t seed);
   static bool ValidateProfile(const RadioProfile &profile, std::string *error);
 
   bool SetProfile(const RadioProfile &profile);
@@ -55,8 +54,10 @@ public:
 
   RadioSnapshot Advance(int64_t timestamp_ns);
   const RadioProfile &profile() const { return profile_; }
+  bool profile_configured() const { return profile_configured_; }
 
 private:
+  void ActivateConfiguredProfile();
   bool ValidateSignal(const SignalState &signal) const;
   bool ValidateCell(const CellState &cell) const;
   void AdvanceAutonomousState(float elapsed_seconds, int64_t timestamp_ns);
@@ -73,6 +74,7 @@ private:
   int64_t next_handover_timestamp_ns_ = 0;
   uint64_t next_call_id_ = 1;
   uint64_t next_sms_sequence_ = 1;
+  bool profile_configured_ = false;
 };
 
 } // namespace floral::radio
