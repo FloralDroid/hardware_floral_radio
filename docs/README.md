@@ -14,6 +14,10 @@ or invalid content leaves the Radio HAL available but reports radio off, no
 SIM, no registration, unknown signal, and no cells. No generated or persisted
 profile is used as a fallback.
 
+The configured `msisdn` is exposed to Android telephony through a standard
+linear-fixed `EF_MSISDN` record, keeping `TelephonyManager` and subscription
+information on the same SIM identity source.
+
 The validated [example profile](../examples/radio.json) can be copied directly
 into a host instance directory as `radio.json`. Identity fields are accepted
 only as one coherent profile: MCC and MNC must prefix the IMSI, IMEI and ICCID

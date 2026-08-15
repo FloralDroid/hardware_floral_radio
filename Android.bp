@@ -28,6 +28,7 @@ cc_library_static {
     srcs: [
         "common/GsmPduCodec.cpp",
         "common/RadioStateModel.cpp",
+        "common/SimFileSystem.cpp",
     ],
     static_libs: ["libfloral_device_simulation_common"],
     export_static_lib_headers: ["libfloral_device_simulation_common"],

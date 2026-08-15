@@ -17,6 +17,7 @@
 #include "floral/radio/GsmPduCodec.h"
 #include "floral/radio/RadioProfileStore.h"
 #include "floral/radio/RadioStateModel.h"
+#include "floral/radio/SimFileSystem.h"
 
 #include <android-base/file.h>
 #include <gtest/gtest.h>
@@ -141,6 +142,43 @@ TEST(GsmPduCodecTest, RejectsBodyLargerThanOneUcs2Segment) {
   std::string error;
   EXPECT_FALSE(EncodeSmsDeliverPdu("+80012345678", std::string(71, 'a'),
                                    1'700'000'000, &pdu, &error));
+}
+
+TEST(SimFileSystemTest, DescribesMsisdnAsOneLinearFixedRecord) {
+  const SimFileIoResult result =
+      ProcessSimFileIo(LoadExampleProfile(), kSimCommandGetResponse,
+                       kSimEfMsisdn, 0, 0, 15);
+
+  EXPECT_EQ(result.status, SimFileIoStatus::kSuccess);
+  EXPECT_EQ(result.sw1, 0x90);
+  EXPECT_EQ(result.sw2, 0x00);
+  EXPECT_EQ(result.response, "000000206F40040000000001020120");
+}
+
+TEST(SimFileSystemTest, EncodesInternationalMsisdnAsAdnRecord) {
+  const SimFileIoResult result =
+      ProcessSimFileIo(LoadExampleProfile(), kSimCommandReadRecord,
+                       kSimEfMsisdn, 1, 4, 32);
+
+  EXPECT_EQ(result.status, SimFileIoStatus::kSuccess);
+  ASSERT_EQ(result.response.size(), 64U);
+  EXPECT_EQ(result.response.substr(36), "07915155214365F7FFFFFFFFFFFF");
+}
+
+TEST(SimFileSystemTest, RejectsInvalidOrUnsupportedRequests) {
+  RadioProfile profile = LoadExampleProfile();
+  EXPECT_EQ(ProcessSimFileIo(profile, kSimCommandReadRecord, kSimEfMsisdn,
+                            2, 4, 32)
+                .status,
+            SimFileIoStatus::kInvalidArguments);
+  EXPECT_EQ(ProcessSimFileIo(profile, kSimCommandReadRecord, 0x6fad, 1, 4, 32)
+                .status,
+            SimFileIoStatus::kNotSupported);
+  profile.msisdn.clear();
+  EXPECT_EQ(ProcessSimFileIo(profile, kSimCommandReadRecord, kSimEfMsisdn,
+                            1, 4, 32)
+                .status,
+            SimFileIoStatus::kInvalidArguments);
 }
 
 } // namespace

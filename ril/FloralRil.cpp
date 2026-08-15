@@ -18,6 +18,7 @@
 
 #include "floral/radio/GsmPduCodec.h"
 #include "floral/radio/RadioStateService.h"
+#include "floral/radio/SimFileSystem.h"
 
 #include <android-base/logging.h>
 #include <android/binder_manager.h>
@@ -373,6 +374,37 @@ void HandleSimPin(void *data, size_t data_length, RIL_Token token) {
   Complete(token, RIL_E_SUCCESS, &retries, sizeof(retries));
 }
 
+void HandleSimIo(void *data, size_t data_length, RIL_Token token) {
+  if (data == nullptr || data_length < sizeof(RIL_SIM_IO_v6)) {
+    Complete(token, RIL_E_INVALID_ARGUMENTS);
+    return;
+  }
+  if (g_service->GetSnapshot().sim_state != SimState::kReady) {
+    Complete(token, RIL_E_INVALID_SIM_STATE);
+    return;
+  }
+
+  const RIL_SIM_IO_v6 &request = *static_cast<RIL_SIM_IO_v6 *>(data);
+  SimFileIoResult result = ProcessSimFileIo(
+      g_service->GetProfile(), request.command, request.fileid, request.p1,
+      request.p2, request.p3);
+  if (result.status == SimFileIoStatus::kInvalidArguments) {
+    Complete(token, RIL_E_INVALID_ARGUMENTS);
+    return;
+  }
+  if (result.status == SimFileIoStatus::kNotSupported) {
+    Complete(token, RIL_E_REQUEST_NOT_SUPPORTED);
+    return;
+  }
+
+  RIL_SIM_IO_Response response = {
+      .sw1 = result.sw1,
+      .sw2 = result.sw2,
+      .simResponse = const_cast<char *>(result.response.c_str()),
+  };
+  Complete(token, RIL_E_SUCCESS, &response, sizeof(response));
+}
+
 void HandleRequest(int request, void *data, size_t data_length,
                    RIL_Token token) {
   if (g_service == nullptr) {
@@ -385,6 +417,9 @@ void HandleRequest(int request, void *data, size_t data_length,
     return;
   case RIL_REQUEST_ENTER_SIM_PIN:
     HandleSimPin(data, data_length, token);
+    return;
+  case RIL_REQUEST_SIM_IO:
+    HandleSimIo(data, data_length, token);
     return;
   case RIL_REQUEST_GET_CURRENT_CALLS:
     RespondCurrentCalls(token);

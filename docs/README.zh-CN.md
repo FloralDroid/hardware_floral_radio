@@ -11,6 +11,9 @@
 可用，但报告无线电关闭、SIM 缺失、未注册、信号未知且没有小区；不会生成默认身份，
 也不会读取持久化身份作为回退。
 
+配置中的 `msisdn` 通过标准 `EF_MSISDN` 线性定长记录提供给 Android 电话服务，
+因此 `TelephonyManager` 和订阅信息读取的是同一份 SIM 号码身份。
+
 仓库中的[示例配置](../examples/radio.json)已由模型测试直接校验，可以作为
 `radio.json` 挂载到宿主实例目录。身份字段按一个整体接收：MCC、MNC 必须是 IMSI
 前缀，IMEI 和 ICCID 必须具有有效校验位，电话号码及 SIM 字段也必须满足各自格式。
